@@ -1,0 +1,213 @@
+---
+description: Services rules - only infrastructure integrations with external systems/databases, no business logic
+alwaysApply: false
+---
+
+# Services Rules
+
+Services (`src/services/`) are **ONLY** integrations with external systems or databases. They abstract away external system details and provide clean, typed interfaces.
+
+## Structure
+
+```
+src/services/
+├── auth/              # Authentication service (external system)
+├── postgres/          # Database service (external system)
+├── redis/             # Redis service (external system)
+├── vernemq/           # VerneMQ service (external system)
+└── websocket/         # WebSocket service utilities
+```
+
+## Responsibilities
+
+Services should handle:
+- Database queries (PostgresService)
+- Redis operations (RedisStreamService)
+- Authentication (AuthService)
+- MQTT operations (VerneMQService)
+- External API calls
+- File system operations
+- Message queue operations
+
+## Service Should NOT
+
+- Contain business logic
+- Perform data transformations (use mappers in business-logic/)
+- Make authorization decisions
+- Validate business rules
+- Handle business error creation (return infrastructure errors only)
+
+## File Structure
+
+### Service Interface
+
+- **Location**: `src/services/[service-name]/service.ts`
+- **Pattern**: Define service interface and Context tag
+
+```typescript
+// src/services/postgres/service.ts
+import type { Effect } from 'effect'
+import type { DatabaseError, NotFoundError } from '../../errors'
+import type { Place, NewPlace } from './types'
+import { Context } from 'effect'
+
+export type PostgresService = {
+  readonly findPlaceById: (id: string) => Effect.Effect<Place, DatabaseError | NotFoundError, never>
+  readonly findPlacesByIds: (ids: string[]) => Effect.Effect<Place[], DatabaseError, never>
+  readonly listPlaces: (query: PlaceListQuery) => Effect.Effect<Place[], DatabaseError, never>
+  readonly createPlace: (input: NewPlace) => Effect.Effect<Place, DatabaseError, never>
+  readonly updatePlace: (id: string, input: UpdatePlace) => Effect.Effect<Place, DatabaseError | NotFoundError, never>
+  readonly deletePlace: (id: string) => Effect.Effect<void, DatabaseError, never>
+  // ... other methods
+}
+
+export const PostgresServiceTag = Context.GenericTag<PostgresService>('PostgresService')
+```
+
+### Service Implementation
+
+- **Location**: `src/services/[service-name]/live/`
+- **Pattern**: Production implementation using actual external systems
+
+```typescript
+// src/services/postgres/live/live.ts
+import { Effect, Layer } from 'effect'
+import { PostgresServiceTag } from '../service'
+import { DatabaseServiceTag } from './db'
+import * as places from './places'
+
+const makePostgresService = Effect.gen(function* () {
+  const databaseService = yield* DatabaseServiceTag
+  
+  const withDatabase = <A, E>(effect: Effect.Effect<A, E, DatabaseService>) =>
+    Effect.provide(effect, Layer.succeed(DatabaseServiceTag, databaseService))
+
+  return PostgresServiceTag.of({
+    findPlaceById: (id: string) => withDatabase(places.findById(id)),
+    createPlace: (input: NewPlace) => withDatabase(places.create(input)),
+    // ... other methods
+  })
+})
+
+export const PostgresLive = Layer.effect(PostgresServiceTag, makePostgresService)
+```
+
+### Service Types
+
+- **Location**: `src/services/[service-name]/types.ts` or inline in service interface
+- **Purpose**: Types used by services (database models, etc.)
+
+```typescript
+// src/services/postgres/types.ts
+export type Place = {
+  id: string
+  name: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export type NewPlace = Omit<Place, 'id' | 'createdAt' | 'updatedAt'>
+
+export type UpdatePlace = Partial<NewPlace>
+```
+
+## Service Interface Best Practices
+
+1. **Return Effect types**: All methods should return `Effect.Effect<...>`
+2. **Use typed errors**: Return infrastructure errors (DatabaseError, etc.), not business errors
+3. **Keep it simple**: Methods should be straightforward operations on external systems
+4. **No business logic**: Don't validate business rules or make authorization decisions
+5. **Read-only methods**: Use `readonly` for all service methods
+
+## Example: PostgresService
+
+```typescript
+export type PostgresService = {
+  // Simple CRUD operations
+  readonly findPlaceById: (id: string) => Effect.Effect<Place, DatabaseError | NotFoundError, never>
+  readonly createPlace: (input: NewPlace) => Effect.Effect<Place, DatabaseError, never>
+  readonly updatePlace: (id: string, input: UpdatePlace) => Effect.Effect<Place, DatabaseError | NotFoundError, never>
+  readonly deletePlace: (id: string) => Effect.Effect<void, DatabaseError, never>
+  
+  // Query operations
+  readonly listPlaces: (query: PlaceListQuery) => Effect.Effect<Place[], DatabaseError, never>
+}
+```
+
+## Example: RedisStreamService
+
+```typescript
+export type RedisStreamService = {
+  readonly publish: (options: StreamPublishOptions) => Effect.Effect<string, RedisError, never>
+  readonly consume: (options: StreamConsumeOptions) => Stream.Stream<StreamMessage, RedisError, never>
+}
+```
+
+## What NOT to Do
+
+### ❌ Don't Put Business Logic in Services
+
+```typescript
+// ❌ BAD - Business logic in service
+export const PostgresService = {
+  createDevice: (input: NewDevice) => {
+    if (input.name.length < 3) {  // ❌ Business validation should be in business-logic/
+      throw new Error('Name too short')
+    }
+    // ...
+  }
+}
+```
+
+### ❌ Don't Put Mappers in Services
+
+```typescript
+// ❌ BAD - Mapper in service
+export const PostgresService = {
+  createDevice: (input: CreateDeviceRequest) => {
+    const dbNew = toDbNew(input)  // ❌ Should be in business-logic/mappers/
+    // ...
+  }
+}
+```
+
+### ❌ Don't Make Authorization Decisions
+
+```typescript
+// ❌ BAD - Authorization in service
+export const PostgresService = {
+  createDevice: (ctx: AuthContext, input: NewDevice) => {
+    if (ctx.role !== 'admin') {  // ❌ Should be in business-logic/
+      throw new Error('Unauthorized')
+    }
+    // ...
+  }
+}
+```
+
+### ❌ Don't Return Business Errors
+
+```typescript
+// ❌ BAD - Business error in service
+export const PostgresService = {
+  createDevice: (input: NewDevice) => {
+    if (input.name === 'forbidden') {
+      return Effect.fail(conflict('Name is forbidden'))  // ❌ Business error should be in business-logic/
+    }
+    // ...
+  }
+}
+```
+
+## Testing
+
+Services should be easily mockable for testing business logic:
+
+```typescript
+// src/services/postgres/test/mock.ts
+export const TestPostgresMock = {
+  createDevice: vi.fn<[NewDevice], Effect.Effect<Device, DatabaseError, never>>(),
+  findDeviceById: vi.fn<[string], Effect.Effect<Device | null, DatabaseError, never>>(),
+  // ...
+}
+```

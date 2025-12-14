@@ -1,0 +1,142 @@
+---
+description: API layer rules - must be super lean with zero business logic, only route registration and schema definitions
+alwaysApply: false
+---
+
+# API Layer Rules
+
+The API layer (`src/api/`) must be **SUPER LEAN** - it contains **ZERO business logic**. It only handles route registration, schema definitions, and wiring business logic functions to handlers.
+
+## Structure
+
+```
+src/api/
+├── types/              # Shared types (HTTP + WebSocket)
+├── shared/             # Shared utilities (context, pagination)
+├── http/               # HTTP-specific implementation
+│   ├── endpoints/      # Route handlers (just registration)
+│   └── shared/         # HTTP utilities (effect-handler, error-mapper)
+└── websocket/          # WebSocket-specific implementation
+```
+
+## Responsibilities
+
+The API layer should **ONLY**:
+- Register routes with Fastify
+- Define request/response schemas (TypeBox)
+- Wire business logic functions to HTTP/WebSocket handlers
+- Handle authentication context building
+- Extract parameters from requests
+
+## HTTP Endpoints
+
+### File Structure
+
+- **Location**: `src/api/http/endpoints/[entity].ts`
+- **Naming**: `[entity].ts` (e.g., `devices.ts`, `places.ts`)
+- **Pattern**: Export `register[Entity]Routes` function
+
+### Example
+
+```typescript
+// src/api/http/endpoints/devices.ts
+import type { FastifyInstance } from 'fastify'
+import { Layer } from 'effect'
+import * as deviceService from '../../business-logic/devices'
+import { AuthLive, PostgresLive } from '../../../services'
+import { createEndpointHandler } from '../handler'
+import { CreateDeviceRequestSchema, DeviceSchema } from '../../types/devices'
+
+const effectHandler = createEndpointHandler(Layer.mergeAll(PostgresLive, AuthLive))
+
+const createDevice = effectHandler(deviceService.createDevice, {
+  statusCode: 201,
+  paramExtractor: req => [req.body],
+})
+
+export async function registerDeviceRoutes(fastify: FastifyInstance) {
+  fastify.post<{ Body: CreateDeviceRequest, Reply: Device }>(
+    '/devices',
+    {
+      schema: {
+        tags: ['Devices'],
+        body: CreateDeviceRequestSchema,
+        response: { 201: DeviceSchema },
+      },
+    },
+    createDevice,
+  )
+}
+```
+
+## WebSocket Endpoints
+
+### Pattern
+
+```typescript
+// src/api/websocket/index.ts
+import { createWebSocketHandler } from './handler'
+import { consumeTelemetryStream } from '../../business-logic/telemetry'
+import { AuthLive, RedisStreamLive } from '../../services'
+
+export async function registerWebSocketRoutes(fastify: FastifyInstance) {
+  const webSocketHandler = createWebSocketHandler(
+    Layer.mergeAll(AuthLive, RedisStreamLive)
+  )
+  
+  const telemetryHandler = webSocketHandler(consumeTelemetryStream)
+  
+  fastify.get('/telemetry/updates', { websocket: true }, telemetryHandler)
+}
+```
+
+## What NOT to Do
+
+### ❌ Don't Put Business Logic in API Layer
+
+```typescript
+// ❌ BAD - Business logic in API
+const createDevice = effectHandler((ctx, input) => {
+  return Effect.gen(function* () {
+    yield* checkAuthorization('admin')(ctx)  // ❌ Should be in business-logic/
+    const dbNew = yield* toDbNew(input)       // ❌ Mapper logic
+    const service = yield* PostgresServiceTag
+    const device = yield* service.createDevice(dbNew)
+    return yield* toApi(device)                // ❌ Mapper logic
+  })
+})
+```
+
+### ❌ Don't Do Data Transformations
+
+```typescript
+// ❌ BAD - Transformation in API
+const createDevice = effectHandler((ctx, input) => {
+  return Effect.gen(function* () {
+    const dbNew = { ...input, createdAt: new Date() }  // ❌ Use mapper in business-logic/
+    // ...
+  })
+})
+```
+
+### ❌ Don't Do Authorization Checks
+
+```typescript
+// ❌ BAD - Authorization in API
+const createDevice = effectHandler((ctx, input) => {
+  return Effect.gen(function* () {
+    if (ctx.role !== 'admin') {  // ❌ Should be in business-logic/
+      return yield* Effect.fail(unauthorizedError())
+    }
+    // ...
+  })
+})
+```
+
+## Best Practices
+
+1. **Keep it thin**: API endpoints should be 1-3 lines calling business logic
+2. **Use paramExtractor**: Extract parameters cleanly from requests
+3. **Compose layers**: Only include service layers needed by the business logic function
+4. **Schema definitions**: Use TypeBox schemas for validation
+5. **Type safety**: Use TypeScript generics for request/response types

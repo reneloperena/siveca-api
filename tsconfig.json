@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./node_modules/@vuhio/tsconfig/node-app.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "rootDir": "./",
+    "types": ["vitest/globals"],
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "removeComments": false,
+    "sourceMap": true
+  },
+  "include": ["src", "scripts"],
+  "exclude": ["node_modules"],
+  "ts-node": {
+    "experimentalSpecifierResolution": "node",
+    "transpileOnly": true,
+    "esm": true
+  }
+}

@@ -1,0 +1,240 @@
+---
+description: Business logic rules - all logic, mappers, validations, and orchestration lives here
+alwaysApply: false
+---
+
+# Business Logic Rules
+
+All business logic, mappers, validations, transformations, and orchestration lives in `src/business-logic/`. This is the **core** of the application.
+
+## Structure
+
+```
+src/business-logic/
+├── auth/              # Authentication & authorization logic
+├── mappers/           # Data transformation (API ↔ DB ↔ Services)
+└── utils/             # Business utilities (pagination, cursors, etc.)
+```
+
+## Responsibilities
+
+Business logic should handle:
+- Authorization checks
+- Data validation
+- Data transformation (via mappers)
+- Orchestrating service calls
+- Business rules and workflows
+- Error handling and business error creation
+
+## File Structure
+
+### Business Logic Functions
+
+- **Location**: `src/business-logic/[entity].ts`
+- **Naming**: `[action][Entity]` (e.g., `createDevice`, `getPlaceById`, `listDevices`)
+- **Pattern**: Export functions that return `Effect.Effect<...>`
+
+### Example
+
+```typescript
+// src/business-logic/devices.ts
+import type { AuthContext } from '../api/shared/context'
+import type { CreateDeviceRequest } from '../api/types/devices'
+import { Effect } from 'effect'
+import { PostgresServiceTag } from '../services/postgres'
+import { checkAuthorization } from './auth/authorization'
+import { toApi, toDbNew } from './mappers/devices'
+
+export function createDevice(ctx: AuthContext, input: CreateDeviceRequest) {
+  return Effect.gen(function* () {
+    yield* checkAuthorization('admin')(ctx)  // ✅ Authorization check
+    const service = yield* PostgresServiceTag
+    const dbNew = yield* toDbNew(input)      // ✅ Mapper (from business-logic/mappers/)
+    const device = yield* service.createDevice(dbNew)
+    return yield* toApi(device)              // ✅ Mapper (from business-logic/mappers/)
+  })
+}
+```
+
+## Mappers
+
+### Location and Naming
+
+- **Location**: `src/business-logic/mappers/[entity].ts`
+- **Naming**: `to[Target]` (e.g., `toApi`, `toDbNew`, `toRedisFields`, `fromRedisFields`)
+- **Pattern**: Pure transformation functions returning `Effect.Effect<...>`
+
+### Example
+
+```typescript
+// src/business-logic/mappers/telemetry.ts
+import type { TelemetryPoint as ApiTelemetryPoint } from '../../api/types/telemetry'
+import type { TelemetryPoint as DbTelemetryPoint } from '../../services/postgres'
+import { Effect } from 'effect'
+
+export function toApi(telemetry: DbTelemetryPoint): Effect.Effect<ApiTelemetryPoint, ParsingError> {
+  return Effect.gen(function* () {
+    const location = yield* parsePointWktOrEwktEffect(telemetry.location)
+    return {
+      id: telemetry.id,
+      vehicleId: telemetry.vehicleId,
+      timestamp: telemetry.timestamp.toISOString(),
+      location: {
+        longitude: location.longitude,
+        latitude: location.latitude,
+      },
+      // ... other fields
+    }
+  })
+}
+
+export function toDbNew(
+  input: ApiCreateTelemetryPoint,
+  vehicleId: string,
+): Effect.Effect<DbNewTelemetryPoint, ParsingError> {
+  return Effect.gen(function* () {
+    const location = yield* buildPointEwkt(
+      input.location.longitude,
+      input.location.latitude,
+    )
+    return {
+      vehicleId,
+      timestamp: input.timestamp ? new Date(input.timestamp) : new Date(),
+      location,
+      // ... other fields
+    }
+  })
+}
+```
+
+## Common Patterns
+
+### Authorization
+
+Always check authorization in business logic:
+
+```typescript
+import { checkAuthorization } from './auth/authorization'
+
+export function createDevice(ctx: AuthContext, input: CreateDeviceRequest) {
+  return Effect.gen(function* () {
+    yield* checkAuthorization('admin')(ctx)  // ✅ Authorization check
+    // ... rest of logic
+  })
+}
+```
+
+### Pagination
+
+Use pagination utilities:
+
+```typescript
+import { createPaginatedResult } from './utils/pagination'
+import { decodeCursor } from './utils/cursor'
+
+export function listDevices(ctx: AuthContext, params: PaginationParams) {
+  return Effect.gen(function* () {
+    const service = yield* PostgresServiceTag
+    const { limit, after } = params
+    const decodedAfter = after ? yield* decodeCursor(after) : undefined
+    const devices = yield* service.listDevices({ limit, after: decodedAfter })
+    return yield* createPaginatedResult(devices, toApi)
+  })
+}
+```
+
+### Data Transformation Flow
+
+Always use mappers for transformations:
+
+```typescript
+// API Request → Business Logic → Mapper → Service → Mapper → API Response
+export function createDevice(ctx: AuthContext, input: CreateDeviceRequest) {
+  return Effect.gen(function* () {
+    const dbNew = yield* toDbNew(input)           // API → DB format
+    const service = yield* PostgresServiceTag
+    const device = yield* service.createDevice(dbNew)  // Service call
+    return yield* toApi(device)                   // DB → API format
+  })
+}
+```
+
+### Error Handling
+
+Use typed errors from `src/errors.ts`:
+
+```typescript
+import { notFoundError, unauthorizedError } from '../errors'
+
+export function getPlace(ctx: AuthContext, id: string) {
+  return Effect.gen(function* () {
+    const service = yield* PostgresServiceTag
+    const place = yield* service.findPlaceById(id)
+    if (!place) {
+      return yield* Effect.fail(notFoundError('Place not found'))
+    }
+    return yield* toApi(place)
+  })
+}
+```
+
+## What NOT to Do
+
+### ❌ Don't Skip Authorization Checks
+
+```typescript
+// ❌ BAD - Missing authorization
+export function deleteDevice(ctx: AuthContext, id: string) {
+  return Effect.gen(function* () {
+    // ❌ Missing: yield* checkAuthorization('admin')(ctx)
+    const service = yield* PostgresServiceTag
+    yield* service.deleteDevice(id)
+  })
+}
+```
+
+### ❌ Don't Put Mappers in Services
+
+```typescript
+// ❌ BAD - Mapper logic should be in business-logic/mappers/
+export function createDevice(ctx: AuthContext, input: CreateDeviceRequest) {
+  return Effect.gen(function* () {
+    const dbNew = {
+      ...input,
+      createdAt: new Date(),  // ❌ Should use toDbNew mapper
+    }
+    // ...
+  })
+}
+```
+
+### ❌ Don't Call Services Directly Without Business Logic
+
+```typescript
+// ❌ BAD - Missing business logic layer
+// This should be in business-logic/, not in API layer
+const createDevice = effectHandler((ctx, input) => {
+  return Effect.gen(function* () {
+    const service = yield* PostgresServiceTag
+    return yield* service.createDevice(input)  // ❌ Missing mappers, validation, etc.
+  })
+})
+```
+
+## Testing
+
+Business logic should be easily testable with mocked services:
+
+```typescript
+import { POSTGRES_MOCKS, runWithTestServices } from '../test/services'
+
+test('should create device', async () => {
+  POSTGRES_MOCKS.createDevice.mockReturnValue(Effect.succeed(mockDevice))
+  
+  const result = await runWithTestServices(
+    devices.createDevice(mockAuthContext, input)
+  ).pipe(Effect.runPromise)
+  
+  expect(POSTGRES_MOCKS.createDevice).toHaveBeenCalledWith(expectedInput)
+})
+```

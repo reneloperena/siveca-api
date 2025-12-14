@@ -1,0 +1,17 @@
+node_modules
+dist
+.git
+.github
+.vscode
+*.md
+.DS_Store
+.env*
+test
+__tests__
+*.test.ts
+*.spec.ts
+coverage
+.vitest
+.eslintcache
+tsconfig*.json
+!tsconfig.build.json

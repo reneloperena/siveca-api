@@ -1,0 +1,141 @@
+---
+description: Clean architecture principles - API layer is super lean, business logic contains everything, services are infrastructure integrations only
+alwaysApply: true
+---
+
+# Architecture Overview
+
+This project follows a **clean architecture** with strict separation of concerns:
+
+```
+src/
+├── api/                    # API Layer (SUPER LEAN - no business logic)
+│   ├── types/              # Shared types (HTTP + WebSocket)
+│   ├── shared/             # Shared utilities (context, pagination)
+│   ├── http/               # HTTP-specific implementation
+│   │   ├── endpoints/      # Route handlers (just registration)
+│   │   └── shared/         # HTTP utilities (effect-handler, error-mapper)
+│   └── websocket/          # WebSocket-specific implementation
+├── business-logic/         # ALL business logic lives here
+│   ├── auth/              # Authentication & authorization logic
+│   ├── mappers/           # Data transformation (API ↔ DB ↔ Services)
+│   └── utils/             # Business utilities
+├── services/              # Service layer (infrastructure integrations)
+│   ├── auth/              # Authentication service (external system)
+│   ├── postgres/          # Database service (external system)
+│   ├── redis/             # Redis service (external system)
+│   ├── vernemq/           # VerneMQ service (external system)
+│   └── websocket/         # WebSocket service utilities
+├── config/                # Configuration
+└── errors.ts              # Error definitions
+```
+
+## Core Architectural Principles
+
+### 1. API Layer Must Be Super Lean
+
+**CRITICAL**: The API layer (`src/api/`) should contain **ZERO business logic**. It only:
+- Registers routes
+- Defines request/response schemas
+- Wires business logic functions to HTTP/WebSocket handlers
+- Handles authentication context building
+
+### 2. Business Logic Contains Everything
+
+**CRITICAL**: All business logic, mappers, validations, transformations, and orchestration lives in `src/business-logic/`.
+
+**Business Logic Responsibilities:**
+- Authorization checks
+- Data validation
+- Data transformation (via mappers)
+- Orchestrating service calls
+- Business rules and workflows
+- Error handling and business error creation
+
+### 3. Services Are Infrastructure Integrations
+
+**CRITICAL**: Services (`src/services/`) are **ONLY** integrations with external systems or databases. They should:
+- Abstract away external system details
+- Provide clean, typed interfaces
+- Handle connection/communication with external systems
+- Return Effect types for composability
+
+**Service Responsibilities:**
+- Database queries (PostgresService)
+- Redis operations (RedisStreamService)
+- Authentication (AuthService)
+- MQTT operations (VerneMQService)
+- External API calls
+- File system operations
+- Message queue operations
+
+**Service Should NOT:**
+- Contain business logic
+- Perform data transformations (use mappers in business-logic/)
+- Make authorization decisions
+- Validate business rules
+
+## Effect-TS Patterns
+
+This codebase uses Effect-TS for functional programming, error handling, and dependency injection.
+
+### Service Dependencies
+
+Always use Effect-TS Context tags for service dependencies:
+
+```typescript
+// ✅ Good - Use service tags
+import { PostgresServiceTag } from '../services/postgres'
+
+export function createPlace(ctx: AuthContext, input: CreatePlace) {
+  return Effect.gen(function* () {
+    const service = yield* PostgresServiceTag
+    const place = yield* service.createPlace(dbNew)
+    return yield* toApi(place)
+  })
+}
+```
+
+### Error Handling
+
+Use typed errors from `src/errors.ts`:
+
+```typescript
+import { unauthorizedError, notFoundError } from '../errors'
+
+export function getPlace(ctx: AuthContext, id: string) {
+  return Effect.gen(function* () {
+    const service = yield* PostgresServiceTag
+    const place = yield* service.findPlaceById(id)
+    if (!place) {
+      return yield* Effect.fail(notFoundError('Place not found'))
+    }
+    return yield* toApi(place)
+  })
+}
+```
+
+### Layer Composition
+
+Compose layers when creating handlers:
+
+```typescript
+// ✅ Good - Compose required service layers
+const effectHandler = createEndpointHandler(
+  Layer.mergeAll(PostgresLive, AuthLive, RedisStreamLive)
+)
+```
+
+## Quick Reference Checklist
+
+When creating a new feature:
+
+- [ ] API endpoint only registers route and calls business logic function
+- [ ] Business logic function contains all logic, mappers, and validations
+- [ ] Service only handles external system integration
+- [ ] Mappers are in `business-logic/mappers/`
+- [ ] Authorization checks are in business logic
+- [ ] All functions return `Effect.Effect<...>`
+- [ ] Service dependencies use Context tags
+- [ ] Errors use typed errors from `errors.ts`
+- [ ] Types are properly separated (API types vs Service types)
