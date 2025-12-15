@@ -305,9 +305,52 @@ export interface _TimescaledbInternalHypertableChunkLocalSize {
   totalBytes: Int8 | null;
 }
 
+export interface GeographyColumns {
+  coordDimension: number | null;
+  fGeographyColumn: string | null;
+  fTableCatalog: string | null;
+  fTableName: string | null;
+  fTableSchema: string | null;
+  srid: number | null;
+  type: string | null;
+}
+
+export interface GeometryColumns {
+  coordDimension: number | null;
+  fGeometryColumn: string | null;
+  fTableCatalog: string | null;
+  fTableName: string | null;
+  fTableSchema: string | null;
+  srid: number | null;
+  type: string | null;
+}
+
+export interface SpatialRefSys {
+  authName: string | null;
+  authSrid: number | null;
+  proj4text: string | null;
+  srid: number;
+  srtext: string | null;
+}
+
+export interface Stations {
+  autoCreated: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  deletedAt: Timestamp | null;
+  description: string | null;
+  fwVer: string | null;
+  location: string | null;
+  model: string | null;
+  name: string | null;
+  status: Generated<string>;
+  updatedAt: Generated<Timestamp>;
+  uuid: string;
+}
+
 export interface TelemetryRaw {
   co: number | null;
   co2: number | null;
+  cursorId: Generated<string>;
   deviceUuid: string;
   extras: Generated<Json>;
   fwVer: string | null;
@@ -533,6 +576,10 @@ export interface DB {
   "_TimescaledbInternal.bgwPolicyChunkStats": _TimescaledbInternalBgwPolicyChunkStats;
   "_TimescaledbInternal.compressedChunkStats": _TimescaledbInternalCompressedChunkStats;
   "_TimescaledbInternal.hypertableChunkLocalSize": _TimescaledbInternalHypertableChunkLocalSize;
+  geographyColumns: GeographyColumns;
+  geometryColumns: GeometryColumns;
+  spatialRefSys: SpatialRefSys;
+  stations: Stations;
   telemetryRaw: TelemetryRaw;
   "timescaledbExperimental.policies": TimescaledbExperimentalPolicies;
   "timescaledbInformation.chunkColumnstoreSettings": TimescaledbInformationChunkColumnstoreSettings;

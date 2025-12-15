@@ -45,6 +45,20 @@ export type UpdateStationRequest = {
 }
 
 /**
+ * Safely convert a Date to ISO string
+ */
+function dateToISO(date: Date | null | undefined): string | null {
+  if (!date) return null
+  if (!(date instanceof Date)) {
+    throw new Error(`Invalid date value: ${date}`)
+  }
+  if (isNaN(date.getTime())) {
+    throw new Error(`Invalid date value: ${date}`)
+  }
+  return date.toISOString()
+}
+
+/**
  * Transforms database station to API format
  */
 export function toApi(station: Station): Effect.Effect<StationApi, never, never> {
@@ -57,9 +71,9 @@ export function toApi(station: Station): Effect.Effect<StationApi, never, never>
     description: station.description,
     status: station.status,
     autoCreated: station.autoCreated,
-    deletedAt: station.deletedAt ? station.deletedAt.toISOString() : null,
-    createdAt: station.createdAt.toISOString(),
-    updatedAt: station.updatedAt.toISOString(),
+    deletedAt: dateToISO(station.deletedAt),
+    createdAt: dateToISO(station.createdAt) ?? new Date().toISOString(), // Fallback if somehow invalid
+    updatedAt: dateToISO(station.updatedAt) ?? new Date().toISOString(), // Fallback if somehow invalid
   })
 }
 

@@ -68,16 +68,22 @@ export const TelemetryPaginationResultSchema = Type.Object({
 export type TelemetryPaginationResult = Static<typeof TelemetryPaginationResultSchema>
 
 /**
- * Telemetry query request
+ * Telemetry query request (Relay-style pagination)
  */
 export const TelemetryQueryRequestSchema = Type.Object({
   device_uuid: Type.Optional(Type.String({ description: 'Filter by device UUID' })),
-  start_time: Type.String({ format: 'date-time', description: 'Start time (ISO 8601)' }),
-  end_time: Type.String({ format: 'date-time', description: 'End time (ISO 8601)' }),
-  limit: Type.Optional(
-    Type.Integer({ minimum: 1, maximum: 1000, default: 100, description: 'Page size' }),
+  start_time: Type.Optional(Type.String({ format: 'date-time', description: 'Start time (ISO 8601). Defaults to beginning of time if not provided.' })),
+  end_time: Type.Optional(Type.String({ format: 'date-time', description: 'End time (ISO 8601). Defaults to end of time if not provided.' })),
+  // Forward pagination
+  first: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: 1000, description: 'Number of items to fetch forward from cursor' }),
   ),
-  after: Type.Optional(Type.String({ description: 'Cursor for pagination' })),
+  after: Type.Optional(Type.String({ description: 'Cursor for forward pagination' })),
+  // Backward pagination
+  last: Type.Optional(
+    Type.Integer({ minimum: 1, maximum: 1000, description: 'Number of items to fetch backward from cursor' }),
+  ),
+  before: Type.Optional(Type.String({ description: 'Cursor for backward pagination' })),
 })
 
 export type TelemetryQueryRequest = Static<typeof TelemetryQueryRequestSchema>

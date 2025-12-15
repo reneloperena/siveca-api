@@ -89,20 +89,72 @@ export function mapErrorToStandardResponse(
         },
       }
 
-    case 'DatabaseError':
+    case 'DatabaseError': {
+      // Try to extract useful error information
+      let errorMessage = 'Database operation failed'
+      let errorDetails: any[] = [
+        {
+          reason: 'DATABASE_ERROR',
+          message: `Database operation '${error.operation}' failed`,
+        },
+      ]
+
+      // Check if cause is a PostgreSQL error
+      const cause = error.cause
+      if (cause && typeof cause === 'object') {
+        const pgError = cause as any
+        if (pgError.code) {
+          errorMessage = pgError.message || errorMessage
+          errorDetails = [
+            {
+              reason: 'DATABASE_ERROR',
+              message: pgError.message || `Database operation '${error.operation}' failed`,
+            },
+          ]
+          if (pgError.detail) {
+            errorDetails.push({
+              reason: 'DATABASE_DETAIL',
+              message: pgError.detail,
+            })
+          }
+          if (pgError.hint) {
+            errorDetails.push({
+              reason: 'DATABASE_HINT',
+              message: pgError.hint,
+            })
+          }
+          if (pgError.table) {
+            errorDetails.push({
+              reason: 'DATABASE_TABLE',
+              message: `Table: ${pgError.table}`,
+            })
+          }
+          if (pgError.constraint) {
+            errorDetails.push({
+              reason: 'DATABASE_CONSTRAINT',
+              message: `Constraint: ${pgError.constraint}`,
+            })
+          }
+        } else if (pgError instanceof Error) {
+          errorMessage = pgError.message
+          errorDetails = [
+            {
+              reason: 'DATABASE_ERROR',
+              message: pgError.message,
+            },
+          ]
+        }
+      }
+
       return {
         error: {
           code: 500,
-          message: 'Internal server error',
+          message: errorMessage,
           status: 'INTERNAL_ERROR',
-          details: [
-            {
-              reason: 'INTERNAL_ERROR',
-              message: 'An internal error occurred',
-            },
-          ],
+          details: errorDetails,
         },
       }
+    }
 
     case 'UnauthorizedError':
       return {

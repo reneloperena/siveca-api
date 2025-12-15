@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import { encodeCursor, encodeCompositeCursor } from './cursor'
+import { encodeCursor } from './cursor'
 
 /**
  * Generic pagination result structure (Relay-style)
@@ -18,11 +18,13 @@ export type PaginationResult<T> = {
 }
 
 /**
- * Pagination parameters
+ * Pagination parameters (Relay-style)
  */
 export type PaginationParams = {
   limit: number
-  after?: string
+  after?: string // Forward pagination cursor
+  before?: string // Backward pagination cursor
+  isBackward?: boolean // Whether this is backward pagination
 }
 
 /**
@@ -49,11 +51,16 @@ export function createPaginatedResult<TDb, TApi, E = any, R = any>(
       ),
     )
 
+    // Determine pagination direction
+    const isBackward = params.isBackward ?? false
+    
     return {
       edges,
       pageInfo: {
-        hasNextPage: edges.length === params.limit,
-        hasPreviousPage: Boolean(params.after),
+        // For forward pagination: hasNextPage if we got limit items, hasPreviousPage if we have an after cursor
+        // For backward pagination: hasPreviousPage if we got limit items, hasNextPage if we have a before cursor
+        hasNextPage: isBackward ? Boolean(params.before) : edges.length === params.limit,
+        hasPreviousPage: isBackward ? edges.length === params.limit : Boolean(params.after),
         startCursor: edges[0]?.cursor,
         endCursor: edges[edges.length - 1]?.cursor,
       },
@@ -87,11 +94,16 @@ export function createPaginatedResultWithId<TDb, TApi, E = any, R = any>(
       ),
     )
 
+    // Determine pagination direction
+    const isBackward = params.isBackward ?? false
+    
     return {
       edges,
       pageInfo: {
-        hasNextPage: edges.length === params.limit,
-        hasPreviousPage: Boolean(params.after),
+        // For forward pagination: hasNextPage if we got limit items, hasPreviousPage if we have an after cursor
+        // For backward pagination: hasPreviousPage if we got limit items, hasNextPage if we have a before cursor
+        hasNextPage: isBackward ? Boolean(params.before) : edges.length === params.limit,
+        hasPreviousPage: isBackward ? edges.length === params.limit : Boolean(params.after),
         startCursor: edges[0]?.cursor,
         endCursor: edges[edges.length - 1]?.cursor,
       },
@@ -100,37 +112,42 @@ export function createPaginatedResultWithId<TDb, TApi, E = any, R = any>(
 }
 
 /**
- * Creates a paginated result with composite cursor (for composite primary keys)
+ * Creates a paginated result with cursor from cursor_id field
  *
  * @param rows - Array of database rows
  * @param params - Pagination parameters
  * @param toApi - Function to convert database row to API format
- * @param getCompositeId - Function to extract composite ID (deviceUuid, time) from database row
+ * @param getCursorId - Function to extract cursor_id from database row
  * @returns Effect that resolves to paginated result
  */
-export function createPaginatedResultWithCompositeCursor<TDb, TApi, E = any, R = any>(
+export function createPaginatedResultWithCursor<TDb, TApi, E = any, R = any>(
   rows: TDb[],
   params: PaginationParams,
   toApi: (row: TDb) => Effect.Effect<TApi, E, R>,
-  getCompositeId: (row: TDb) => { deviceUuid: string; time: Date },
+  getCursorId: (row: TDb) => string,
 ): Effect.Effect<PaginationResult<TApi>, E, R> {
   return Effect.gen(function* () {
     const edges = yield* Effect.all(
       rows.map(r =>
         Effect.gen(function* () {
           const node = yield* toApi(r)
-          const compositeId = getCompositeId(r)
-          const cursor = yield* encodeCompositeCursor(compositeId.deviceUuid, compositeId.time)
+          const cursorId = getCursorId(r)
+          const cursor = yield* encodeCursor(cursorId)
           return { cursor, node }
         }),
       ),
     )
 
+    // Determine pagination direction
+    const isBackward = params.isBackward ?? false
+    
     return {
       edges,
       pageInfo: {
-        hasNextPage: edges.length === params.limit,
-        hasPreviousPage: Boolean(params.after),
+        // For forward pagination: hasNextPage if we got limit items, hasPreviousPage if we have an after cursor
+        // For backward pagination: hasPreviousPage if we got limit items, hasNextPage if we have a before cursor
+        hasNextPage: isBackward ? Boolean(params.before) : edges.length === params.limit,
+        hasPreviousPage: isBackward ? edges.length === params.limit : Boolean(params.after),
         startCursor: edges[0]?.cursor,
         endCursor: edges[edges.length - 1]?.cursor,
       },

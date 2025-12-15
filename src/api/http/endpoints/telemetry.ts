@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { Layer } from 'effect'
 import * as telemetryService from '../../../business-logic/telemetry'
-import { AuthLive, PostgresLive } from '../../../services'
+import { PostgresLive } from '../../../services'
 import { createEndpointHandler } from '../handler'
 import {
   TelemetryQueryRequestSchema,
@@ -9,10 +9,11 @@ import {
   type TelemetryQueryRequest,
 } from '../../types/telemetry'
 
-const telemetryHandler = createEndpointHandler(Layer.mergeAll(PostgresLive, AuthLive))
+const telemetryHandler = createEndpointHandler(PostgresLive)
 
 const queryTelemetry = telemetryHandler(telemetryService.queryTelemetry, {
   statusCode: 200,
+  unauthenticated: true,
   paramExtractor: (req) => {
     const query = req.query as any
     return [
@@ -20,8 +21,10 @@ const queryTelemetry = telemetryHandler(telemetryService.queryTelemetry, {
         deviceUuid: query.device_uuid,
         startTime: query.start_time,
         endTime: query.end_time,
-        limit: query.limit ? Number(query.limit) : undefined,
+        first: query.first ? Number(query.first) : undefined,
         after: query.after,
+        last: query.last ? Number(query.last) : undefined,
+        before: query.before,
       },
     ]
   },
@@ -37,19 +40,6 @@ export async function registerTelemetryRoutes(fastify: FastifyInstance) {
         response: {
           200: TelemetryPaginationResultSchema,
           400: {
-            type: 'object',
-            properties: {
-              error: {
-                type: 'object',
-                properties: {
-                  code: { type: 'number' },
-                  message: { type: 'string' },
-                  status: { type: 'string' },
-                },
-              },
-            },
-          },
-          401: {
             type: 'object',
             properties: {
               error: {

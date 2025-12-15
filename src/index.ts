@@ -34,8 +34,12 @@ async function buildServer() {
       },
       servers: [
         {
+          url: '/api/v1',
+          description: 'Current server (via nginx or direct)',
+        },
+        {
           url: `http://localhost:${config.PORT}/api/v1`,
-          description: 'Local development server',
+          description: 'Direct API server',
         },
       ],
       components: {

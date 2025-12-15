@@ -1,4 +1,3 @@
-import type { AuthContext } from '../api/shared/context'
 import { Effect } from 'effect'
 import { PostgresServiceTag } from '../services/postgres/service'
 import { notFound } from '../errors'
@@ -9,7 +8,6 @@ import type { StationListParams } from '../services/postgres/service'
  * List stations with optional status filter
  */
 export function listStations(
-  ctx: AuthContext,
   params: StationListParams = {},
 ): Effect.Effect<
   Array<{
@@ -43,7 +41,6 @@ export function listStations(
  * Get station by UUID
  */
 export function getStationById(
-  ctx: AuthContext,
   uuid: string,
 ): Effect.Effect<
   {
@@ -78,7 +75,6 @@ export function getStationById(
  * Create a new station
  */
 export function createStation(
-  ctx: AuthContext,
   input: CreateStationRequest,
 ): Effect.Effect<
   {
@@ -109,7 +105,6 @@ export function createStation(
  * Update station
  */
 export function updateStation(
-  ctx: AuthContext,
   uuid: string,
   input: UpdateStationRequest,
 ): Effect.Effect<
@@ -141,7 +136,6 @@ export function updateStation(
  * Delete station (soft delete)
  */
 export function deleteStation(
-  ctx: AuthContext,
   uuid: string,
 ): Effect.Effect<void, any, any> {
   return Effect.gen(function* () {

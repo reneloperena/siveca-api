@@ -21,6 +21,7 @@ export function queryTelemetry(
         let query = db
           .selectFrom('telemetry_raw' as any) // Use snake_case table name
           .select([
+            'cursor_id',
             'time',
             'device_uuid',
             'fw_ver',
@@ -57,26 +58,78 @@ export function queryTelemetry(
           query = query.where('device_uuid' as any, '=', params.deviceUuid)
         }
 
-        // Cursor-based pagination using composite key (device_uuid, time)
-        if (params.afterDeviceUuid && params.afterTime) {
-          // Use tuple comparison: (device_uuid, time) > (after_device_uuid, after_time)
-          // Note: Using raw SQL for tuple comparison as Kysely doesn't support it directly
-          query = query.where(
-            sql`(device_uuid, time) > (${params.afterDeviceUuid}, ${params.afterTime})` as any,
-          )
+        // Cursor-based pagination using cursor_id UUID
+        // We need to look up the cursor row's time to filter correctly since we order by time
+        if (params.isBackward && params.beforeCursor) {
+          // For backward pagination, we need to find rows before the cursor's time
+          // First, get the time and cursor_id of the cursor row
+          const cursorRow = await db
+            .selectFrom('telemetry_raw' as any)
+            .select(['time', 'cursor_id'])
+            .where('cursor_id' as any, '=', params.beforeCursor)
+            .executeTakeFirst()
+
+          if (cursorRow) {
+            // Filter: (time < cursor_time) OR (time = cursor_time AND cursor_id < cursor_id)
+            query = query.where(eb =>
+              eb.or([
+                eb('time' as any, '<', cursorRow.time),
+                eb.and([
+                  eb('time' as any, '=', cursorRow.time),
+                  eb('cursor_id' as any, '<', cursorRow.cursor_id),
+                ]),
+              ]),
+            )
+          }
+        } else if (params.afterCursor) {
+          // For forward pagination, we need to find rows after the cursor's time
+          // First, get the time and cursor_id of the cursor row
+          const cursorRow = await db
+            .selectFrom('telemetry_raw' as any)
+            .select(['time', 'cursor_id'])
+            .where('cursor_id' as any, '=', params.afterCursor)
+            .executeTakeFirst()
+
+          if (cursorRow) {
+            // Filter: (time < cursor_time) OR (time = cursor_time AND cursor_id > cursor_id)
+            // Note: For DESC ordering, "after" means time < cursor_time
+            query = query.where(eb =>
+              eb.or([
+                eb('time' as any, '<', cursorRow.time),
+                eb.and([
+                  eb('time' as any, '=', cursorRow.time),
+                  eb('cursor_id' as any, '>', cursorRow.cursor_id),
+                ]),
+              ]),
+            )
+          }
         }
 
-        // Order by (device_uuid, time) for consistent pagination
-        query = query
-          .orderBy('device_uuid' as any, 'asc')
-          .orderBy('time', 'desc')
-          .limit(params.limit)
+        // Order by time (desc for newest first, asc for oldest first in backward)
+        // Use ingested_at and cursor_id as tiebreakers for stable sorting
+        if (params.isBackward) {
+          query = query
+            .orderBy('time', 'asc')
+            .orderBy('ingested_at', 'asc')
+            .orderBy('cursor_id', 'asc') // Stable sort
+        } else {
+          query = query
+            .orderBy('time', 'desc')
+            .orderBy('ingested_at', 'desc')
+            .orderBy('cursor_id', 'asc') // Stable sort
+        }
+        
+        query = query.limit(params.limit)
 
         const rows = await query.execute()
 
+        // For backward pagination, reverse the results to maintain chronological order
+        const orderedRows = params.isBackward ? rows.reverse() : rows
+
         // Transform rows to TelemetryPoint format
         // CamelCasePlugin converts snake_case DB columns to camelCase in TypeScript
-        return rows.map((row: any) => ({
+        return orderedRows.map((row: any) => ({
+          cursorId: row.cursorId || row.cursor_id,
           time: row.time,
           deviceUuid: row.deviceUuid || row.device_uuid,
           fwVer: row.fwVer ?? row.fw_ver ?? null,

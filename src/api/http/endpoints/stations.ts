@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify'
+import { Type } from '@sinclair/typebox'
 import { Layer } from 'effect'
 import * as stationService from '../../../business-logic/stations'
-import { AuthLive, PostgresLive } from '../../../services'
+import { PostgresLive } from '../../../services'
 import { createEndpointHandler } from '../handler'
 import {
   StationSchema,
@@ -12,10 +13,11 @@ import {
   type UpdateStationRequest,
 } from '../../types/stations'
 
-const stationHandler = createEndpointHandler(Layer.mergeAll(PostgresLive, AuthLive))
+const stationHandler = createEndpointHandler(PostgresLive)
 
 const listStations = stationHandler(stationService.listStations, {
   statusCode: 200,
+  unauthenticated: true,
   paramExtractor: (req) => {
     const query = req.query as any
     return [{ status: query.status }]
@@ -24,6 +26,7 @@ const listStations = stationHandler(stationService.listStations, {
 
 const getStationById = stationHandler(stationService.getStationById, {
   statusCode: 200,
+  unauthenticated: true,
   paramExtractor: (req) => {
     const params = req.params as any
     return [params.uuid]
@@ -32,6 +35,7 @@ const getStationById = stationHandler(stationService.getStationById, {
 
 const createStation = stationHandler(stationService.createStation, {
   statusCode: 201,
+  unauthenticated: true,
   paramExtractor: (req) => {
     return [req.body as CreateStationRequest]
   },
@@ -39,6 +43,7 @@ const createStation = stationHandler(stationService.createStation, {
 
 const updateStation = stationHandler(stationService.updateStation, {
   statusCode: 200,
+  unauthenticated: true,
   paramExtractor: (req) => {
     const params = req.params as any
     return [params.uuid, req.body as UpdateStationRequest]
@@ -47,6 +52,7 @@ const updateStation = stationHandler(stationService.updateStation, {
 
 const deleteStation = stationHandler(stationService.deleteStation, {
   statusCode: 204,
+  unauthenticated: true,
   paramExtractor: (req) => {
     const params = req.params as any
     return [params.uuid]
@@ -62,19 +68,6 @@ export async function registerStationRoutes(fastify: FastifyInstance) {
       response: {
         200: Type.Array(StationSchema),
         400: {
-          type: 'object',
-          properties: {
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'number' },
-                message: { type: 'string' },
-                status: { type: 'string' },
-              },
-            },
-          },
-        },
-        401: {
           type: 'object',
           properties: {
             error: {
@@ -113,19 +106,6 @@ export async function registerStationRoutes(fastify: FastifyInstance) {
             },
           },
         },
-        401: {
-          type: 'object',
-          properties: {
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'number' },
-                message: { type: 'string' },
-                status: { type: 'string' },
-              },
-            },
-          },
-        },
       },
     },
   }, getStationById)
@@ -138,19 +118,6 @@ export async function registerStationRoutes(fastify: FastifyInstance) {
       response: {
         201: StationSchema,
         400: {
-          type: 'object',
-          properties: {
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'number' },
-                message: { type: 'string' },
-                status: { type: 'string' },
-              },
-            },
-          },
-        },
-        401: {
           type: 'object',
           properties: {
             error: {
@@ -190,19 +157,6 @@ export async function registerStationRoutes(fastify: FastifyInstance) {
             },
           },
         },
-        401: {
-          type: 'object',
-          properties: {
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'number' },
-                message: { type: 'string' },
-                status: { type: 'string' },
-              },
-            },
-          },
-        },
       },
     },
   }, updateStation)
@@ -217,19 +171,6 @@ export async function registerStationRoutes(fastify: FastifyInstance) {
       response: {
         204: Type.Null(),
         404: {
-          type: 'object',
-          properties: {
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'number' },
-                message: { type: 'string' },
-                status: { type: 'string' },
-              },
-            },
-          },
-        },
-        401: {
           type: 'object',
           properties: {
             error: {

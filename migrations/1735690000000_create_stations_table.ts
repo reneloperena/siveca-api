@@ -11,8 +11,23 @@ import { sql } from 'kysely'
  * - Indexes for efficient queries
  */
 export async function up(db: Kysely<any>): Promise<void> {
-  // Ensure PostGIS extension is available
-  await sql`CREATE EXTENSION IF NOT EXISTS postgis`.execute(db)
+  // Check if PostGIS extension is available
+  // Note: PostGIS must be installed on the PostgreSQL server before running this migration
+  // For local development with Docker: The postgres image needs postgis extension installed
+  // For example: Use postgis/postgis image or install postgis in your postgres container
+  try {
+    await sql`CREATE EXTENSION IF NOT EXISTS postgis`.execute(db)
+  } catch (error: any) {
+    if (error?.code === '0A000' || error?.message?.includes('postgis')) {
+      throw new Error(
+        'PostGIS extension is not available. Please install PostGIS on your PostgreSQL server.\n' +
+        'For Docker: Use postgis/postgis image or add postgis to your postgres container.\n' +
+        'For local PostgreSQL: Install postgresql-postgis package.\n' +
+        `Original error: ${error.message}`,
+      )
+    }
+    throw error
+  }
 
   // Create the stations table
   await db.schema

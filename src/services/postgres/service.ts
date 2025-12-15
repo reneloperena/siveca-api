@@ -3,21 +3,25 @@ import type { DatabaseError, NotFoundError } from '../../errors'
 import { Context } from 'effect'
 
 /**
- * Telemetry query parameters
+ * Telemetry query parameters (Relay-style pagination)
  */
 export type TelemetryQueryParams = {
   deviceUuid?: string
   startTime: Date
   endTime: Date
   limit: number
-  afterDeviceUuid?: string
-  afterTime?: Date
+  // Forward pagination
+  afterCursor?: string // UUID cursor
+  // Backward pagination
+  beforeCursor?: string // UUID cursor
+  isBackward?: boolean
 }
 
 /**
  * Telemetry point from database
  */
 export type TelemetryPoint = {
+  cursorId: string // UUID for cursor-based pagination
   time: Date
   deviceUuid: string
   fwVer: string | null
