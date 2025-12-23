@@ -305,6 +305,29 @@ export interface _TimescaledbInternalHypertableChunkLocalSize {
   totalBytes: Int8 | null;
 }
 
+export interface ExportCatalog {
+  bucketTs: Timestamp;
+  catalogType: string;
+  createdAt: Generated<Timestamp>;
+  day: number;
+  deviceUuid: string;
+  extras: Generated<Json>;
+  filename: string;
+  finalized: Generated<boolean>;
+  firstTime: Timestamp | null;
+  format: Generated<string>;
+  fromTs: Timestamp;
+  hour: number | null;
+  lastTime: Timestamp | null;
+  month: number;
+  path: string;
+  rowCount: Generated<number>;
+  sizeEstimate: Generated<Int8>;
+  toTs: Timestamp;
+  updatedAt: Generated<Timestamp>;
+  year: number;
+}
+
 export interface GeographyColumns {
   coordDimension: number | null;
   fGeographyColumn: string | null;
@@ -576,6 +599,7 @@ export interface DB {
   "_TimescaledbInternal.bgwPolicyChunkStats": _TimescaledbInternalBgwPolicyChunkStats;
   "_TimescaledbInternal.compressedChunkStats": _TimescaledbInternalCompressedChunkStats;
   "_TimescaledbInternal.hypertableChunkLocalSize": _TimescaledbInternalHypertableChunkLocalSize;
+  exportCatalog: ExportCatalog;
   geographyColumns: GeographyColumns;
   geometryColumns: GeometryColumns;
   spatialRefSys: SpatialRefSys;

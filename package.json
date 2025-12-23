@@ -19,7 +19,8 @@
     "db:migrate:make": "kysely migrate:make",
     "db:migrate:run": "node --loader ts-node/esm --loader @vuhio/loader scripts/migrate.ts up && node --loader ts-node/esm --loader @vuhio/loader scripts/generate-db.ts",
     "db:migrate:rollback": "node --loader ts-node/esm --loader @vuhio/loader scripts/migrate.ts down && node --loader ts-node/esm --loader @vuhio/loader scripts/generate-db.ts",
-    "db:migrate:status": "node --loader @vuhio/loader scripts/migrate.ts status"
+    "db:migrate:status": "node --loader @vuhio/loader scripts/migrate.ts status",
+    "test:startup-repair": "node --loader ts-node/esm --loader @vuhio/loader scripts/test-startup-repair.ts"
   },
   "dependencies": {
     "@effect/platform": "^0.92.1",
@@ -37,11 +38,12 @@
     "dotenv": "^17.2.1",
     "effect": "^3.18.4",
     "fastify": "^5.5.0",
-    "graphql": "^16.11.0",
     "js-yaml": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
+    "fast-xml-parser": "^4.3.5",
     "kysely": "^0.28.7",
     "mqtt": "^5.10.2",
+    "node-cron": "^3.0.3",
     "pg": "^8.16.3",
     "redis": "^5.9.0"
   },
@@ -51,6 +53,7 @@
     "@types/node": "^24.3.0",
     "@types/pg": "^8.15.5",
     "@types/mqtt": "^2.5.0",
+    "@types/node-cron": "^3.0.11",
     "@vitest/coverage-v8": "^4.0.4",
     "@vuhio/eslint-config": "^1.0.0-alpha.4",
     "eslint": "^9.33.0",

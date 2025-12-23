@@ -29,6 +29,7 @@ const ConfigSchema = z.object({
   VERNEMQ_PORT: z.coerce.number().optional().default(1883),
   VERNEMQ_USERNAME: z.string().optional().default(''),
   VERNEMQ_PASSWORD: z.string().optional().default(''),
+  EXPORT_TIMEZONE: z.string().optional().default('America/Los_Angeles'), // PST/PDT
 })
 
 const parsed = ConfigSchema.safeParse(process.env)

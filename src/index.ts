@@ -16,12 +16,33 @@ import { VerneMQLive } from './services/vernemq'
 import 'dotenv/config'
 
 async function buildServer() {
-  const app = Fastify().withTypeProvider<TypeBoxTypeProvider>()
+  const app = Fastify({
+    httpMethods: [
+      'GET',
+      'HEAD',
+      'POST',
+      'PUT',
+      'DELETE',
+      'OPTIONS',
+    ],
+  }).withTypeProvider<TypeBoxTypeProvider>()
 
   await app.register(fastifyCors, {
     origin: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    methods: [
+      'GET',
+      'HEAD',
+      'POST',
+      'PUT',
+      'PATCH',
+      'DELETE',
+      'OPTIONS',
+    ],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+    ],
     credentials: true,
   })
 
